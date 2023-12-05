@@ -1,6 +1,6 @@
-module github.com/bloXroute-Labs/bx-mev-tools/pkg/maputil
+module github.com/bloXroute-Labs/bx-mev-tools/pkg/ptrutil
 
-go 1.21.4
+go 1.21.5
 
 require github.com/stretchr/testify v1.8.4
 
