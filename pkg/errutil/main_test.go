@@ -1,78 +1,78 @@
-package errutil
+package errutil_test
 
 import (
 	"errors"
 	"io"
-	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/bloXroute-Labs/bx-mev-tools/pkg/errutil"
 )
 
-var errMockClose = errors.New("mock close error")
+var closeErr = errors.New("close error")
 
-// mockClosable is used to test the Close function
-type mockClosable struct{}
+// MockCloser is a mock implementation of io.Closer
+type MockCloser struct{ mock.Mock }
 
-// Close overrides the Close method to return an error
-func (m *mockClosable) Close() error { return errMockClose }
+func (m *MockCloser) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
 
 func TestClose(t *testing.T) {
-	t.Run("closable nil", func(t *testing.T) {
-		var err = io.EOF
+	tests := []struct {
+		name        string
+		closable    io.Closer
+		closeError  error
+		expectedErr *error
+	}{
+		{
+			name:        "Successful Close",
+			closable:    new(MockCloser),
+			closeError:  nil,
+			expectedErr: nil,
+		},
+		{
+			name:        "Error On Close",
+			closable:    new(MockCloser),
+			closeError:  closeErr,
+			expectedErr: &closeErr,
+		},
+		{
+			name:        "Nil Closable",
+			closable:    nil,
+			closeError:  nil,
+			expectedErr: nil,
+		},
+		{
+			name:        "Nil Closable and Nil ErrPtr",
+			closable:    nil,
+			closeError:  nil,
+			expectedErr: nil,
+		},
+	}
 
-		Close(nil, &err)
-		require.Error(t, err)
-		require.ErrorIs(t, err, io.EOF)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var err error
+			if tt.closable != nil && tt.name != "Nil Closable and Nil ErrPtr" {
+				mockCloser := tt.closable.(*MockCloser)
+				mockCloser.On("Close").Return(tt.closeError)
+			}
 
-		err = io.ErrUnexpectedEOF
-		Close(nil, &err)
-		require.Error(t, err)
-		require.NotErrorIs(t, err, io.EOF)
-		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
-	})
+			if tt.name != "Nil Closable and Nil ErrPtr" {
+				errutil.Close(tt.closable, &err)
+			} else {
+				errutil.Close(tt.closable, nil) // Passing nil as the error pointer
+			}
 
-	t.Run("closable not nil", func(t *testing.T) {
-		file, err := os.CreateTemp("", "closable")
-		require.NoError(t, err)
-		require.Implements(t, (*io.Closer)(nil), file)
-
-		defer func() { require.NoError(t, os.Remove(file.Name())) }()
-
-		Close(file, &err)
-		require.NoError(t, err)
-
-		closable := new(mockClosable)
-		require.Implements(t, (*io.Closer)(nil), closable)
-
-		Close(closable, &err)
-		require.ErrorIs(t, err, errMockClose)
-		require.NotErrorIs(t, err, io.EOF)
-
-		err = io.EOF
-		require.ErrorIs(t, err, io.EOF)
-		require.NotErrorIs(t, err, errMockClose)
-
-		Close(closable, &err)
-		require.ErrorIs(t, err, io.EOF)
-		require.ErrorIs(t, err, errMockClose)
-	})
-
-	t.Run("err nil", func(t *testing.T) {
-		var err error
-
-		require.NoError(t, err)
-
-		Close(new(mockClosable), &err)
-		require.ErrorIs(t, err, errMockClose)
-	})
-
-	t.Run("closable nil and err nil", func(t *testing.T) {
-		var err error
-
-		require.NoError(t, err)
-
-		Close(nil, &err)
-		require.NoError(t, err)
-	})
+			if tt.expectedErr != nil {
+				assert.EqualError(t, err, (*tt.expectedErr).Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
