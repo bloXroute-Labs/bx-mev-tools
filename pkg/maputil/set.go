@@ -39,8 +39,10 @@ func (s *Set[K]) Clear() { maps.Clear(s.m) }
 func (s *Set[K]) Size() int { return len(s.m) }
 
 // Each calls 'fn' on every item in the set in no particular order.
-func (s *Set[K]) Each(fn func(key K)) {
+func (s *Set[K]) Each(fn func(key K) bool) {
 	for k := range s.m {
-		fn(k)
+		if !fn(k) {
+			return
+		}
 	}
 }

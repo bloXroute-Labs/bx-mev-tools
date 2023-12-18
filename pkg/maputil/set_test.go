@@ -9,10 +9,12 @@ import (
 )
 
 func checkeq[K comparable](set *maputil.Set[K], get func(k K) bool, t *testing.T) {
-	set.Each(func(key K) {
+	set.Each(func(key K) bool {
 		if !get(key) {
 			t.Fatalf("value %v should be in the set", key)
 		}
+
+		return true
 	})
 }
 
